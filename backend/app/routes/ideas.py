@@ -1,56 +1,36 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from typing import List
-from jose import jwt
-from fastapi.security import OAuth2PasswordBearer
 from ..core.database import get_db
-from ..core.config import settings
 from ..models.models import User, Idea
-from ..schemas.schemas import IdeaCreate, IdeaUpdate, IdeaOut, AIResponse
+from ..schemas.schemas import IdeaCreate, IdeaUpdate, IdeaOut
+from ..dependencies import get_current_user
+from ..services import idea_service
+from ..core.constants import ERROR_MSG_IDEA_NOT_FOUND
 
 router = APIRouter(prefix="/ideas", tags=["ideas"])
-from ..dependencies import get_current_user
 
 @router.get("/", response_model=List[IdeaOut])
 async def get_ideas(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Idea).where(Idea.user_id == user.id))
-    return result.scalars().all()
+    return await idea_service.get_multi_by_user(db, user_id=user.id)
 
 @router.post("/", response_model=IdeaOut)
 async def create_idea(idea_data: IdeaCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    new_idea = Idea(
-        title=idea_data.title,
-        description=idea_data.description,
-        status=idea_data.status,
-        user_id=user.id
-    )
-    db.add(new_idea)
-    await db.commit()
-    await db.refresh(new_idea)
-    return new_idea
+    return await idea_service.create(db, obj_in_data=idea_data.model_dump(), user_id=user.id)
 
 @router.put("/{idea_id}", response_model=IdeaOut)
 async def update_idea(idea_id: int, idea_data: IdeaUpdate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Idea).where(Idea.id == idea_id, Idea.user_id == user.id))
-    idea = result.scalar_one_or_none()
+    idea = await idea_service.get_by_id_and_user(db, id=idea_id, user_id=user.id)
     if not idea:
-        raise HTTPException(status_code=404, detail="Idea not found")
+        raise HTTPException(status_code=404, detail=ERROR_MSG_IDEA_NOT_FOUND)
     
-    for key, value in idea_data.dict(exclude_unset=True).items():
-        setattr(idea, key, value)
-    
-    await db.commit()
-    await db.refresh(idea)
-    return idea
+    return await idea_service.update(db, db_obj=idea, obj_in_data=idea_data.model_dump(exclude_unset=True))
 
 @router.delete("/{idea_id}")
 async def delete_idea(idea_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Idea).where(Idea.id == idea_id, Idea.user_id == user.id))
-    idea = result.scalar_one_or_none()
-    if not idea:
-        raise HTTPException(status_code=404, detail="Idea not found")
+    success = await idea_service.delete_by_id_and_user(db, id=idea_id, user_id=user.id)
+    if not success:
+        raise HTTPException(status_code=404, detail=ERROR_MSG_IDEA_NOT_FOUND)
     
-    await db.delete(idea)
-    await db.commit()
     return {"message": "Idea deleted successfully"}
+

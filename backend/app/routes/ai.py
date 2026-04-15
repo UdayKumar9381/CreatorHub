@@ -4,6 +4,7 @@ import os
 from groq import Groq
 from ..schemas.schemas import AIResponse, ChatRequest
 from ..core.config import settings
+from ..core.constants import AI_SYSTEM_PROMPT_IDEA_GEN, AI_SYSTEM_PROMPT_CHAT
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -43,7 +44,7 @@ async def generate_idea():
         completion = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
-                {"role": "system", "content": "You are a creative startup incubator assistant. Generate a unique, innovative, and practical startup idea. Respond with a JSON object containing 'title' and 'description' keys only. Keep the description under 200 characters."},
+                {"role": "system", "content": AI_SYSTEM_PROMPT_IDEA_GEN},
                 {"role": "user", "content": "Generate a new startup idea."}
             ],
             response_format={"type": "json_object"}
@@ -63,7 +64,7 @@ async def ai_chat(request: ChatRequest):
         completion = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
-                {"role": "system", "content": "You are IdeaFlow Bot, a helpful AI assistant for creators. You help with brainstorming, project planning, and technical advice. Keep responses concise and inspiring."},
+                {"role": "system", "content": AI_SYSTEM_PROMPT_CHAT},
                 {"role": "user", "content": request.message}
             ]
         )
@@ -71,3 +72,4 @@ async def ai_chat(request: ChatRequest):
     except Exception as e:
         print(f"Groq API error: {e}")
         return {"response": "I'm having trouble connecting to my brain right now. Please try again in a moment."}
+
