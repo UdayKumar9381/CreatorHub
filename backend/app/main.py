@@ -1,11 +1,16 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import auth, ideas, ai, notes, projects, checklist
-from app.core.config import settings
+import time
+import logging
 
-app = FastAPI(title=settings.PROJECT_NAME)
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("api")
 
-# CORS Setup
+app = FastAPI(title="IdeaFlow API")
+
+# 1. ADD MIDDLEWARE IMMEDIATELY AFTER APP INIT
+# 2. NO ROUTER IMPORTS BEFORE THIS LINE
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -15,9 +20,26 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
-# Include Routes
+# Debug Middleware to log Origin headers
+@app.middleware("http")
+async def log_origin_header(request: Request, call_next):
+    origin = request.headers.get("origin")
+    method = request.method
+    path = request.url.path
+    if origin:
+        logger.info(f"Incoming Request: {method} {path} from Origin: {origin}")
+    else:
+        logger.info(f"Incoming Request: {method} {path} (No Origin header)")
+    
+    response = await call_next(request)
+    return response
+
+# 3. INCLUDE ROUTERS AFTER MIDDLEWARE
+from app.routes import auth, ideas, ai, notes, projects, checklist
+
 app.include_router(auth.router)
 app.include_router(ideas.router)
 app.include_router(ai.router)
@@ -27,4 +49,9 @@ app.include_router(checklist.router)
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to IdeaFlow API", "docs": "/docs"}
+    return {
+        "message": "Welcome to IdeaFlow API", 
+        "docs": "/docs",
+        "status": "online",
+        "environment": "production"
+    }
