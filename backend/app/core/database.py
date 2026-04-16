@@ -2,7 +2,13 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import DeclarativeBase
 from .config import settings
 
-engine = create_async_engine(settings.DATABASE_URL, echo=True)
+# Create engine with pool_pre_ping to automatically handle disconnected connections (common in production/Render)
+engine = create_async_engine(
+    settings.DATABASE_URL, 
+    echo=True,
+    pool_pre_ping=True,
+    pool_recycle=3600,
+)
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
