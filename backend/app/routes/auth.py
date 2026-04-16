@@ -36,16 +36,41 @@ async def signup(user_data: UserSignup, db: AsyncSession = Depends(get_db)):
     await db.refresh(new_user)
     return new_user
 
+import traceback
+import logging
+
+logger = logging.getLogger("api")
+
 @router.post("/login", response_model=Token)
 async def login(user_data: UserLogin, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == user_data.email))
-    user = result.scalar_one_or_none()
-    
-    if not user or not verify_password(user_data.password, user.password_hash):
-        raise HTTPException(status_code=401, detail=ERROR_MSG_INVALID_CREDENTIALS)
-    
-    access_token = create_access_token(subject=user.id)
-    return {"access_token": access_token, "token_type": "bearer"}
+    try:
+        logger.info(f"LOGIN ATTEMPT: {user_data.email}")
+        result = await db.execute(select(User).where(User.email == user_data.email))
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            logger.warning(f"LOGIN FAILED: User not found - {user_data.email}")
+            raise HTTPException(status_code=401, detail=ERROR_MSG_INVALID_CREDENTIALS)
+            
+        if not verify_password(user_data.password, user.password_hash):
+            logger.warning(f"LOGIN FAILED: Invalid password - {user_data.email}")
+            raise HTTPException(status_code=401, detail=ERROR_MSG_INVALID_CREDENTIALS)
+        
+        access_token = create_access_token(subject=user.id)
+        logger.info(f"LOGIN SUCCESS: {user_data.email}")
+        return {"access_token": access_token, "token_type": "bearer"}
+        
+    except HTTPException as he:
+        # Re-raise HTTPExceptions as they are intended for the client
+        raise he
+    except Exception as e:
+        # Log the full traceback for any unexpected error
+        logger.error(f"CRITICAL LOGIN ERROR for {user_data.email}: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Internal Server Error during login: {type(e).__name__}: {str(e)}"
+        )
 
 @router.post("/forgot-password")
 async def forgot_password(request: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):

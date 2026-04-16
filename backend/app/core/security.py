@@ -22,9 +22,23 @@ def create_reset_token(email: str) -> str:
     to_encode = {"exp": expire, "sub": email, "type": TokenType.RESET}
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
+import logging
+
+logger = logging.getLogger("api")
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception as e:
+        logger.error(f"PASSWORD VERIFICATION ERROR: {str(e)}")
+        # This could happen if the hashed_password is not a valid bcrypt hash
+        # or if there's a problem with the passlib context
+        return False
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    try:
+        return pwd_context.hash(password)
+    except Exception as e:
+        logger.error(f"PASSWORD HASHING ERROR: {str(e)}")
+        raise e
 
